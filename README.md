@@ -1,12 +1,10 @@
 # ModuleControl
-Simple code to start controlling OPTIMOM module and play with some Gstreamer plugins
+Simple code to start controlling Emerald-Gen2 module and play with some Gstreamer plugins
 
 
 # Release Notes
-- add compatibility with TMP451-Q1
-- fixed-focus compatibility + temperature sensor (NCT72)
-- add multifocus
-- correct some gst commands
+- first version for Emerald-gen2 (tested on orin nano)
+- implement focus dac control for liquid lens
 
 # Compilation
 IMPORTANT: make sure the time clock and date are correct in the Jetson before any compilation
@@ -35,13 +33,17 @@ After resrting the terminal, test the plugin installation with:
 	gst-inspect-1.0 barcodereader
 
 # Application manual
+Make sure to be part of i2c group with `groups` command, if not add it with:
+
+	sudo usermod -aG i2c $USER
+
 Open the two applications in separated terminals:
 
-## terminal 1: control module I2C bus
+### terminal 1: control module I2C bus
 
 	./ModuleControl
 
-## terminal 2: control GSTREAMER vieo stream I2C bus
+### terminal 2: control GSTREAMER vieo stream I2C bus
 
 	./gstCommands
 

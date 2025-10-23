@@ -40,7 +40,7 @@ int main(){
 
 	moduleCtrl = new ModuleCtrl();
 
-	moduleCtrl->ModuleControlInit(); // init ic2
+	moduleCtrl->ModuleControlInit("/dev/i2c-2"); // init ic2
 	//system("v4l2-ctl -d /dev/video0 --set-fmt-video=width=1920,height=1080,pixelformat='GREY' --set-ctrl sensor_mode=2");
 	printHelp();
 	while (isRunning){
@@ -109,13 +109,13 @@ int main(){
 				}
 				break;
 			case '1': //write PDA50 DAC value
-				printf("Enter PDA50 TLENS register value (Range:-91 to 879): ");
+				printf("Enter PDA50 TLENS register value (Range:  0 to 1045): ");
 				scanf("%d",&PdaRegValue); 
 				moduleCtrl->write_VdacPda(PdaRegValue);
 				break;
-			case '2': //read PDA50 DAC value
+			case '2': //read PDA50 DAC value2
             			moduleCtrl->read_VdacPda(&PdaRegValue, &PdaVoltageValue);
-				printf("PDA50 TLens: VdacPdaValue=%d, PdaVoltageValue=%.2fV\n", PdaRegValue, PdaVoltageValue);
+				printf("FOCUS DAC: DacValue=%d, VoltageValue=%.3fV\n", PdaRegValue, PdaVoltageValue);
 				break;
 /*			case '3':
 				err = dumpPda50Reg(devicepda, bus);
@@ -243,8 +243,9 @@ int read_sensor_feedback(ModuleCtrl *moduleCtrl)
 	//READ SENSOR STATE
 	Address = 0x0053;
 	Value = 0;
-	moduleCtrl->readReg(Address, &Value);
-	printf("reg_state=0x%04x (%d)",Value,Value);
+	// moduleCtrl->readReg(Address, &Value);
+	// printf("reg_state=0x%04x (%d)",Value,Value);
+	moduleCtrl->read_sensor_state(&Value);
 	Value=Value/256;
 	printf("\nglobal_state=0x%x (%d)",Value,Value);
 	if (Value==0x100) printf(" => SDTBY \n");

@@ -1,16 +1,16 @@
+#include <fstream>
 #include "ModuleControl.hpp"
 
 #define SENSORS_I2C_ADDR 0x10
-#define PDA50_I2C_ADDR 0x0C
-#define TEMP_NCT_I2C_ADDR 0x4C
-#define TEMP_TMP_I2C_ADDR 0x4E
+#define PDA50_I2C_ADDR 0x18
+#define TEMP_I2C_ADDR 0x4C
 #define EEPROM_I2C_ADDR 0x50
-#define REG_FB_STATE 0x53
-#define REG_LINE_LENGTH 0x06
-#define REG_TINT_LL 0x0B
-#define REG_TINT_CK 0x0C
-#define REG_ANA_GAIN 0x0D
-#define REG_DIG_GAIN 0x0E
+#define REG_FB_STATE 0x0068
+#define REG_LINE_LENGTH 0x0006
+#define REG_TINT_LL 0x0020
+#define REG_TINT_CK 0x0021
+#define REG_ANA_GAIN 0x0022
+#define REG_DIG_GAIN 0x0022
 
 
 /************************************************
@@ -27,93 +27,55 @@ ModuleCtrl::~ModuleCtrl()
 /************************************************
  *Init I2C bus
  ************************************************/
-void ModuleCtrl::ModuleControlInit()
+int ModuleCtrl::ModuleControlInit(const char bus_name[32])
 {
+	int error = 0;
+
 	/* Open i2c bus */
 	if ((bus = i2c_open(bus_name)) == -1)
 	{
-
 		fprintf(stderr, "Open i2c bus:%s error!\n", bus_name);
-		strcpy(bus_name, "/dev/i2c-7"); //try other bus
-
-		if ((bus = i2c_open(bus_name)) == -1)
-		{
-			fprintf(stderr, "Open i2c bus:%s error!\n", bus_name);
-			strcpy(bus_name, "/dev/i2c-8");//try other bus
-
-			if ((bus = i2c_open(bus_name)) == -1)
-			{
-				fprintf(stderr, "Open i2c bus:%s error!\n", bus_name);
-				exit(-3);
-			}
-		}
+		error = -3;
 	}
-	printf("Bus %s open\n", bus_name);
-
-	/* Init sensor i2c device */
-	memset(&device, 0, sizeof(device));
-	i2c_init_device(&device);
-	device.bus = bus;
-	/*device address*/
-	device.addr = SENSORS_I2C_ADDR;
-	/*Unknown value*/
-	device.page_bytes = 256;
-	/*Address length in bytes*/
-	device.iaddr_bytes = 1;
-
-	/* Init i2c devicepda */
-	memset(&devicepda, 0, sizeof(devicepda));
-	i2c_init_device(&devicepda);
-	devicepda.bus = bus;
-	/*device address*/
-	devicepda.addr = PDA50_I2C_ADDR;
-	/*Unknown value*/
-	devicepda.page_bytes = 8;
-	/*Address length in bytes*/
-	devicepda.iaddr_bytes = 1;
-
-	// Enable PDA50 DAC
-	printf("Enable PDA50 DAC\n");
-	enable_VdacPda(devicepda, bus);
-
-
-	/* Init i2c devicetemp */
-	memset(&devicetemp, 0, sizeof(devicetemp));
-	i2c_init_device(&devicetemp);
-	devicetemp.bus = bus;
-	/*device address*/
-	devicetemp.addr = TEMP_NCT_I2C_ADDR;
-	/*Unknown value*/
-	devicetemp.page_bytes = 8;
-	/*Address length in bytes*/
-	devicetemp.iaddr_bytes = 1;
-
-
-
-	int regAddr;
-	unsigned char buffer[1];
-	ssize_t size = sizeof(buffer);
-	memset(buffer, 0, size);
-	int error=0;
-	unsigned char regVal;
-
-	// READ TEMP CHIP-ID to determine device address: NCT vs TMP
-	regAddr = 0xFE;
-	if ((i2c_ioctl_read(&devicetemp, regAddr, &regVal, size)) != size)
+	else
 	{
-		fprintf(stderr, "READ ERROR: device=0x%x register address=0x%x\n", devicetemp.addr, regAddr);
-		error=-3;
-		/*change device address for TMP*/
-		devicetemp.addr = TEMP_TMP_I2C_ADDR;
-	}
-	else fprintf(stderr, "READ: device=0x%x register address=0x%x\n", devicetemp.addr, regAddr);
+		printf("Bus %s open\n", bus_name);
 
-	if ((i2c_ioctl_read(&devicetemp, regAddr, &regVal, size)) != size)
-	{
-		fprintf(stderr, "READ ERROR: device=0x%x register address=0x%x\n", devicetemp.addr, regAddr);
-		error=-3;
+		/* Init sensor i2c device */
+		memset(&device, 0, sizeof(device));
+		i2c_init_device(&device);
+		device.bus = bus;
+		/*device address*/
+		device.addr = SENSORS_I2C_ADDR;
+		/*Unknown value*/
+		device.page_bytes = 256;
+		/*Address length in bytes*/
+		device.iaddr_bytes = 2;
+
+		/* Init i2c devicepda */
+		memset(&devicepda, 0, sizeof(devicepda));
+		i2c_init_device(&devicepda);
+		devicepda.bus = bus;
+		/*device address*/
+		devicepda.addr = PDA50_I2C_ADDR;
+		/*Unknown value*/
+		devicepda.page_bytes = 8;
+		/*Address length in bytes*/
+		devicepda.iaddr_bytes = 2;
+
+		/* Init i2c devicetemp */
+		memset(&devicetemp, 0, sizeof(devicetemp));
+		i2c_init_device(&devicetemp);
+		devicetemp.bus = bus;
+		/*device address*/
+		devicetemp.addr = TEMP_I2C_ADDR;
+		/*Unknown value*/
+		devicetemp.page_bytes = 8;
+		/*Address length in bytes*/
+		devicetemp.iaddr_bytes = 1;
 	}
-	else fprintf(stderr, "READ: device=0x%x register address=0x%x\n", devicetemp.addr, regAddr);
+	
+	return error;
 }
 
 /************************************************
@@ -121,15 +83,10 @@ void ModuleCtrl::ModuleControlInit()
  ************************************************/
 void ModuleCtrl::ModuleControlClose()
 {
-	// Disable PDA50 DAC
-	printf("Disable PDA50 DAC\n");
-	
-	disable_VdacPda(devicepda, bus);
-
 	/* Close de bus*/
 	i2c_close(bus);
 
-	printf("Bus %s closed\n", bus_name);
+	printf("I2C Bus closed\n");
 }
 
 /************************************************
@@ -417,101 +374,77 @@ int disable_VdacPda(I2CDevice device, int bus)
 	return error;
 }
 
-int ModuleCtrl::write_VdacPda(int PdaRegValue)
+int ModuleCtrl::write_VdacPda(int dacValue)
 {
-	int regAddr;
-	unsigned char buffer[1];
+	int regAddr, regValue;
+	unsigned char buffer[4];
 	ssize_t size = sizeof(buffer);
 	memset(buffer, 0, size);
-	int error=0;
+	int error=0,ret;
+	int DAC_LSB=44; //LSB in mV
+	int DAC_value;
+	int minVal=0x0000;
+	int maxVal=0xB3B0; //1045 in DAC value
+
+	regValue=dacValue*DAC_LSB;
 
 	// SET DAC VALUE
 	// printf("PdaRegValue=%d\n", PdaRegValue);
-	if (PdaRegValue > 879)
+	if (regValue > maxVal)
 	{
-		PdaRegValue = 879;
+		regValue = maxVal;
 	}
-	else if (PdaRegValue < -91)
+	else if (regValue < minVal)
 	{
-		PdaRegValue = -91;
+		regValue = minVal;
 	}
 
-	unsigned char MSB, LSB;
-	if (PdaRegValue >= 0)
-	{
-		MSB = 0x80 + ((PdaRegValue >> 8) & 0xFF);
-		LSB = PdaRegValue & 0xFF;
-	}
-	else
-	{
-		PdaRegValue = -PdaRegValue;
-		MSB = 0x0 + ((PdaRegValue >> 8) & 0xFF);
-		LSB = PdaRegValue & 0xFF;
-	}
-	// printf("Val=%d, MSB=0x%x, LSB=0x%x\n", PdaRegValue, MSB, LSB);
-	devicepda.page_bytes = 8;
-	// WRITE MSB
-	regAddr = 0x02;
-	*buffer = MSB;
-	if ((i2c_ioctl_write(&devicepda, regAddr, buffer, size)) != size)
+	devicepda.page_bytes = 8; //??
+
+
+	regAddr = 0x00;
+	ret=i2c_ioctl_write(&devicepda, regAddr, &regValue, size);
+
+	if (ret != size)
 	{
 		fprintf(stderr, "Can't write in 0x%x reg!\n", regAddr);
 		error=-3;
 	}
-	// dumpPda50Reg(devicepda, bus);
-	//  WRITE LSB
-	regAddr = 0x03;
-	*buffer = LSB;
-	if ((i2c_ioctl_write(&devicepda, regAddr, buffer, size)) != size)
-	{
-		fprintf(stderr, "Can't write in 0x%x reg!\n", regAddr);
-		error=-3;
-	}
-	// dumpPda50Reg(devicepda, bus);
+
 	return error;
 }
 
-int ModuleCtrl::read_VdacPda(int *PdaRegValue, double *PdaVoltageValue)
+int ModuleCtrl::read_VdacPda(int *dacValue, double *voltageValue)
 {
 
-	int regAddr, b;
-	unsigned char buffer[1];
+	int regAddr, b, regVal;
+	unsigned char buffer[4];
 	ssize_t size = sizeof(buffer);
 	memset(buffer, 0, size);
-	int error=0;
+	int error=0, ret;
+	int DAC_LSB=44; //LSB in mV
 
 	devicepda.page_bytes = 1;
 
 	unsigned char MSB, LSB;
 	// READ MSB
-	regAddr = 0x02;
-	if ((i2c_ioctl_read(&devicepda, regAddr, &MSB, size)) != size)
+	regAddr = 0x00;
+
+	ret=i2c_ioctl_read(&devicepda, regAddr, &regVal, size);
+
+	if (ret != size)
 	{
 		fprintf(stderr, "Can't read 0x%x reg!\n", regAddr);
 		error=-3;
-	}
-
-	// READ LSB
-	regAddr = 0x03;
-	*buffer = LSB;
-	if ((i2c_ioctl_read(&devicepda, regAddr, &LSB, size)) != size)
-	{
-		fprintf(stderr, "Can't read 0x%x reg!\n", regAddr);
-		error=-3;
-	}
-
-	if (MSB >= 128)
-	{
-		b = ((MSB & 0x7F) << 8) + LSB;
-		// printf("Val=%d, Val=0x%x, MSB=0x%x, LSB=0x%x\n", b, b, MSB, LSB);
 	}
 	else
 	{
-		b = -(((MSB & 0x7F) << 8) + LSB);
-		// printf("Val=%d, Val=0x%x, MSB=0x%x, LSB=0x%x\n", b, -b, MSB, LSB);
+		printf("regVal=0x%x (%d)\n", regVal, regVal);
+
 	}
-	*PdaRegValue = b;
-	*PdaVoltageValue = (double)b * (double)(0.0546);
+
+	*dacValue = regVal/DAC_LSB;
+	*voltageValue = *dacValue * DAC_LSB * (double)(0.001)+24;
 	return error;
 }
 

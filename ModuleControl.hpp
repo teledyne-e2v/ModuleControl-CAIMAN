@@ -39,13 +39,6 @@ private:
 
     /**
      * @brief 
-     * Name of the ic2 bus
-     * 
-     */
-    char bus_name[32] = "/dev/i2c-6"; //<--bus 6
-
-    /**
-     * @brief 
      * PDA IC2 device (control lens)
      */
     I2CDevice devicepda;
@@ -67,7 +60,7 @@ public:
      * @brief 
      * Initialise IC2 connection
      */
-    void ModuleControlInit();
+    int ModuleControlInit(const char bus_name[32]);
 
     ~ModuleCtrl();
 
@@ -116,7 +109,7 @@ public:
      * @param PdaRegValue 
      * @return int 
      */
-    int write_VdacPda(int PdaRegValue);
+    int write_VdacPda(int dacValue);
 
     /**
      * @brief write specified value in the specified register
@@ -137,7 +130,7 @@ public:
      */
     int readReg(int regAddr, int *value);
 
-    int read_VdacPda( int *PdaRegValue, double *PdaVoltageValue);
+    int read_VdacPda( int *dacValue, double *voltageValue);
 
     int read_Temp(double *LocalTempValue, double *RemoteTempValue, int TempMode);
     int get_TempMode(int *tempMode);
