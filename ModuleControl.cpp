@@ -1,7 +1,7 @@
 #include <fstream>
 #include "ModuleControl.hpp"
 
-#define SENSORS_I2C_ADDR 0x10
+#define SENSORS_I2C_ADDR 0x27
 #define PDA50_I2C_ADDR 0x18
 #define TEMP_I2C_ADDR 0x4C
 #define EEPROM_I2C_ADDR 0x50
@@ -50,29 +50,8 @@ int ModuleCtrl::ModuleControlInit(const char bus_name[32])
 		/*Unknown value*/
 		device.page_bytes = 256;
 		/*Address length in bytes*/
-		device.iaddr_bytes = 2;
-
-		/* Init i2c devicepda */
-		memset(&devicepda, 0, sizeof(devicepda));
-		i2c_init_device(&devicepda);
-		devicepda.bus = bus;
-		/*device address*/
-		devicepda.addr = PDA50_I2C_ADDR;
-		/*Unknown value*/
-		devicepda.page_bytes = 8;
-		/*Address length in bytes*/
-		devicepda.iaddr_bytes = 2;
-
-		/* Init i2c devicetemp */
-		memset(&devicetemp, 0, sizeof(devicetemp));
-		i2c_init_device(&devicetemp);
-		devicetemp.bus = bus;
-		/*device address*/
-		devicetemp.addr = TEMP_I2C_ADDR;
-		/*Unknown value*/
-		devicetemp.page_bytes = 8;
-		/*Address length in bytes*/
-		devicetemp.iaddr_bytes = 1;
+		device.iaddr_bytes = 8;
+		device.delay = 1;
 	}
 	
 	return error;
@@ -111,6 +90,53 @@ int ModuleCtrl::readReg(int regAddr, int *value)
 	{
 		*value = buffer[0] * 256 + buffer[1];
 	}
+	//printf("error=%d\n",error);q
+	return error;
+}
+
+int ModuleCtrl::readReg64b(uint32_t regAddr, int *value)
+{
+	//register 0x00000040
+	//sudo i2ctransfer -f -y 9 w8@0x27 0x00 0x08 0x40 0x00 0x40 0x00 0x00 0x00
+	//sudo i2ctransfer -f -y 9 r68@0x27
+	unsigned char buffer[64];
+	ssize_t size = sizeof(buffer);
+	memset(buffer, 0, size);
+	int error=0;
+
+	device.page_bytes = 256;
+	// buffer[0] = 1;
+	// buffer[1] = 2;
+	// buffer[2] = 3;
+	// buffer[3] = 4;
+	// buffer[4] = 5;
+	// buffer[5] = 6;
+	// buffer[6] = 7;
+	// buffer[7] = 8;
+	// buffer[8] = 9;
+
+	// uint64_t regAddrRead = (regAddr << 32) | 0x00400800;
+	// printf("regAddrRead=0x%016lX\n",regAddrRead);
+	
+	error = i2c_read(&device, regAddr, buffer, size);
+	// printf("Buffer=%02x %02x %02x %02x %02x %02x %02x %02x %02x\n", buffer[0], buffer[1], buffer[2], buffer[3], buffer[4], buffer[5], buffer[6], buffer[7], buffer[8]);
+	printf("Buffer=");
+	for (int i = 0; i < 68; i++) {
+		printf("%02x ", buffer[i]);
+		*value = (*value << 8) | buffer[i];
+	}
+	printf("\n");
+	printf("Data: %s\n", buffer);
+	printf("Value=0x%0136X\n", *value);
+	// if ((i2c_ioctl_read(&device, regAddr, buffer, size)) != size)
+	// {
+	// 	fprintf(stderr, "READ ERROR: device=0x%x register address=0x%x\n", device.addr, regAddr);
+	// 	error=-3;
+	// }
+	// else
+	// {
+	// 	*value = buffer[0] * 256 + buffer[1];
+	// }
 	//printf("error=%d\n",error);
 	return error;
 }

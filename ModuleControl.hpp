@@ -130,6 +130,8 @@ public:
      */
     int readReg(int regAddr, int *value);
 
+    int readReg64b(uint32_t regAddr, int *value);
+
     int read_VdacPda( int *dacValue, double *voltageValue);
 
     int read_Temp(double *LocalTempValue, double *RemoteTempValue, int TempMode);

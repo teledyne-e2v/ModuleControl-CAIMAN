@@ -6,6 +6,7 @@ extern "C"
 {
 #endif
 #pragma once
+#include <stdint.h>
 #include <sys/types.h>
 #include <linux/i2c.h>
 #include <linux/i2c-dev.h>
@@ -19,7 +20,7 @@ extern "C"
         unsigned char delay;      /* I2C internal operation delay, unit millisecond */
         unsigned short flags;     /* I2C i2c_ioctl_read/write flags */
         unsigned int page_bytes;  /* I2C max number of bytes per page, 1K/2K 8, 4K/8K/16K 16, 32K/64K 32 etc */
-        unsigned int iaddr_bytes; /* I2C device internal(word) address bytes, such as: 24C04 1 byte, 24C64 2 bytes */
+        uint64_t iaddr_bytes; /* I2C device internal(word) address bytes, such as: 24C04 1 byte, 24C64 2 bytes */
     } I2CDevice;
 
     /* Close i2c bus */
@@ -38,7 +39,7 @@ extern "C"
     int i2c_select(int bus, unsigned long dev_addr, unsigned long tenbit);
 
     /* I2C internal(word) address convert */
-    void i2c_iaddr_convert(unsigned int int_addr, unsigned int iaddr_bytes, unsigned char *addr);
+    void i2c_iaddr_convert(uint64_t iaddr, unsigned int len, unsigned char *addr);
 
     /* I2C file I/O read, write */
     ssize_t i2c_read(const I2CDevice *device, unsigned int iaddr, void *buf, size_t len);

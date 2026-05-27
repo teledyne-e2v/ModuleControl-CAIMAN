@@ -40,7 +40,9 @@ int main(){
 
 	moduleCtrl = new ModuleCtrl();
 
-	moduleCtrl->ModuleControlInit("/dev/i2c-2"); // init ic2
+	moduleCtrl->ModuleControlInit("/dev/i2c-9"); // init ic2
+	
+
 	//system("v4l2-ctl -d /dev/video0 --set-fmt-video=width=1920,height=1080,pixelformat='GREY' --set-ctrl sensor_mode=2");
 	printHelp();
 	while (isRunning){
@@ -62,7 +64,8 @@ int main(){
 			case 'r': //read register
 				printf("Register address (hexa): ");
 				scanf("%x",&regAddress);
-        			if(moduleCtrl->readReg(regAddress, &regValue)==0) printf("@0x%02x -> 0x%04x (%d)\n", regAddress, regValue, regValue);
+        			//if(moduleCtrl->readReg(regAddress, &regValue)==0) printf("@0x%02x -> 0x%04x (%d)\n", regAddress, regValue, regValue);
+					moduleCtrl->readReg64b(regAddress, &regValue);
 				break;
 			case 'w': //write register
 				printf("Register address (hexa) : ");
