@@ -1,10 +1,6 @@
 # ModuleControl
-Simple code to start controlling Emerald-Gen2 module and play with some Gstreamer plugins
+Simple code to start controlling Caiman-OnyxMax module and play with some Gstreamer plugins
 
-
-# Release Notes
-- first version for Emerald-gen2 (tested on orin nano)
-- implement focus dac control for liquid lens
 
 # Compilation
 IMPORTANT: make sure the time clock and date are correct in the Jetson before any compilation

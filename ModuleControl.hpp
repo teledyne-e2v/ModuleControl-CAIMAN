@@ -1,5 +1,5 @@
 #pragma once
-#include "i2c.hpp"
+#include "i2c_caiman.hpp"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -130,7 +130,8 @@ public:
      */
     int readReg(int regAddr, int *value);
 
-    int readReg64b(uint32_t regAddr, int *value);
+    int readReg64b(uint32_t regAddr,  char *str);
+    int printBootstrapData(void);
 
     int read_VdacPda( int *dacValue, double *voltageValue);
 

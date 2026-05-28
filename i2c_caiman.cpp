@@ -6,7 +6,7 @@
 #include <fcntl.h>
 #include <sys/ioctl.h>
 #include <arpa/inet.h>
-#include "i2c.hpp"
+#include "i2c_caiman.hpp"
 
 /* I2C default delay */
 #define I2C_DEFAULT_DELAY 1
@@ -100,129 +100,6 @@ char *i2c_get_device_desc(const I2CDevice *device, char *buf, size_t size)
 }
 
 /*
-**	i2c_ioctl_read/write
-**	I2C bus top layer interface to operation different i2c devide
-**	This function will call XXX:ioctl system call and will be related
-**	i2c-dev.c i2cdev_ioctl to operation i2c device.
-**	1. it can choice ignore or not ignore i2c bus ack signal (flags set I2C_M_IGNORE_NAK)
-**	2. it can choice ignore or not ignore i2c internal address
-**
-*/
-ssize_t i2c_ioctl_read(const I2CDevice *device, unsigned int iaddr, void *buf, size_t len)
-{
-    struct i2c_msg ioctl_msg[2];
-    struct i2c_rdwr_ioctl_data ioctl_data;
-    unsigned char addr[INT_ADDR_MAX_BYTES];
-    unsigned short flags = GET_I2C_FLAGS(device->tenbit, device->flags);
-
-    memset(addr, 0, sizeof(addr));
-    memset(ioctl_msg, 0, sizeof(ioctl_msg));
-    memset(&ioctl_data, 0, sizeof(ioctl_data));
-
-    /* Target have internal address */
-    if (device->iaddr_bytes)
-    {
-
-        i2c_iaddr_convert(iaddr, device->iaddr_bytes, addr);
-
-        /* First message is write internal address */
-        ioctl_msg[0].len = device->iaddr_bytes;
-        ioctl_msg[0].addr = device->addr;
-        ioctl_msg[0].buf = addr;
-        ioctl_msg[0].flags = flags;
-
-        /* Second message is read data */
-        ioctl_msg[1].len = len;
-        ioctl_msg[1].addr = device->addr;
-        ioctl_msg[1].buf = static_cast<unsigned char *>(buf);
-        ioctl_msg[1].flags = flags | I2C_M_RD;
-
-        /* Package to i2c message to operation i2c device */
-        ioctl_data.nmsgs = 2;
-        ioctl_data.msgs = ioctl_msg;
-    }
-    /* Target did not have internal address */
-    else
-    {
-
-        /* Direct send read data message */
-        ioctl_msg[0].len = len;
-        ioctl_msg[0].addr = device->addr;
-        ioctl_msg[0].buf = static_cast<unsigned char *>(buf);
-        ioctl_msg[0].flags = flags | I2C_M_RD;
-
-        /* Package to i2c message to operation i2c device */
-        ioctl_data.nmsgs = 1;
-        ioctl_data.msgs = ioctl_msg;
-    }
-
-    /* Using ioctl interface operation i2c device */
-    if (ioctl(device->bus, I2C_RDWR, (unsigned long)&ioctl_data) == -1)
-    {
-
-        perror("Ioctl read i2c error:");
-        return -1;
-    }
-
-    return len;
-}
-
-ssize_t i2c_ioctl_write(const I2CDevice *device, unsigned int iaddr, const void *buf, size_t len)
-{
-    ssize_t remain = len;
-    size_t size = 0, cnt = 0;
-    const unsigned char *buffer = (unsigned char *)buf;
-    unsigned char delay = GET_I2C_DELAY(device->delay);
-    unsigned short flags = GET_I2C_FLAGS(device->tenbit, device->flags);
-
-    struct i2c_msg ioctl_msg;
-    struct i2c_rdwr_ioctl_data ioctl_data;
-    unsigned char tmp_buf[PAGE_MAX_BYTES + INT_ADDR_MAX_BYTES];
-
-    while (remain > 0)
-    {
-
-        size = GET_WRITE_SIZE(iaddr % device->page_bytes, remain, device->page_bytes);
-
-        /* Convert i2c internal address */
-        memset(tmp_buf, 0, sizeof(tmp_buf));
-        i2c_iaddr_convert(iaddr, device->iaddr_bytes, tmp_buf);
-
-        /* Connect write data after device internal address */
-        memcpy(tmp_buf + device->iaddr_bytes, buffer, size);
-
-        /* Fill kernel ioctl i2c_msg */
-        memset(&ioctl_msg, 0, sizeof(ioctl_msg));
-        memset(&ioctl_data, 0, sizeof(ioctl_data));
-
-        ioctl_msg.len = device->iaddr_bytes + size;
-        ioctl_msg.addr = device->addr;
-        ioctl_msg.buf = tmp_buf;
-        ioctl_msg.flags = flags;
-
-        ioctl_data.nmsgs = 1;
-        ioctl_data.msgs = &ioctl_msg;
-
-        if (ioctl(device->bus, I2C_RDWR, (unsigned long)&ioctl_data) == -1)
-        {
-
-            perror("Ioctl write i2c error:");
-            return -1;
-        }
-
-        /* XXX: Must have a little time delay */
-        i2c_delay(delay);
-
-        cnt += size;
-        iaddr += size;
-        buffer += size;
-        remain -= size;
-    }
-
-    return cnt;
-}
-
-/*
 **	@brief	:	read #len bytes data from #device #iaddr to #buf
 **	#device	:	I2CDevice struct, must call i2c_device_init first
 **	#iaddr	:	i2c_device internal address will read data from this address, no address set zero
@@ -230,14 +107,14 @@ ssize_t i2c_ioctl_write(const I2CDevice *device, unsigned int iaddr, const void 
 **	#len	:	how many data to read, lenght must less than or equal to buf size
 **	@return : 	success return read data length, failed -1
 */
-ssize_t i2c_read(const I2CDevice *device, uint32_t iaddr, void *buf, size_t len)
+ssize_t i2c_caiman_read(const I2CDevice *device, uint32_t iaddr, void *buf, size_t len)
 {
     ssize_t cnt;
     unsigned char addr[INT_ADDR_MAX_BYTES];
     unsigned char delay = GET_I2C_DELAY(device->delay);
     // uint32_t regAddrHeader = 0x00400800; // Command code READ_MEM_CMD (0x0800) 
-    uint32_t regAddrHeader =(static_cast<uint32_t>(len) << 16) | static_cast<uint32_t>(READ_MEM_CMD); // Command code READ_MEM_CMD (0x0800) and length in high 16 bit
-    uint64_t regAddrRead = (static_cast<uint64_t>(iaddr) << 32) | static_cast<uint64_t>(regAddrHeader);
+    uint32_t regAddrHeader =((uint32_t)len << 16) | (uint32_t)READ_MEM_CMD; // Command code READ_MEM_CMD (0x0800) and length in high 16 bit
+    uint64_t regAddrRead = ((uint64_t)iaddr << 32) | (uint64_t)regAddrHeader;
 
 	unsigned char readbuf[len+4]; // creates read buffer with extra 4 bytes for status code
 	ssize_t size = sizeof(readbuf);
@@ -279,9 +156,9 @@ ssize_t i2c_read(const I2CDevice *device, uint32_t iaddr, void *buf, size_t len)
     }
 
     /* Print full buffer for debug */
-    printf("Read Buffer=");
-	for (int i = 0; i < size; i++) { printf("%02x ", readbuf[i]); }
-    printf("\n");
+    // printf("Read Buffer=");
+	// for (int i = 0; i < size; i++) { printf("%02x ", readbuf[i]); }
+    // printf("\n");
     
     /* Check status codes */
     memcpy(status, readbuf, size_status); // copy the first 4 bytes which is status code to status buffer
@@ -314,7 +191,7 @@ ssize_t i2c_read(const I2CDevice *device, uint32_t iaddr, void *buf, size_t len)
 **	#len	:	buf data length without '/0'
 **	@return	: 	success return write data length, failed -1
 */
-ssize_t i2c_write(const I2CDevice *device, unsigned int iaddr, const void *buf, size_t len)
+ssize_t i2c_caiman_write(const I2CDevice *device, uint32_t iaddr, const void *buf, size_t len)
 {
     ssize_t remain = len;
     size_t cnt = 0, size = 0;
@@ -343,7 +220,7 @@ ssize_t i2c_write(const I2CDevice *device, unsigned int iaddr, const void *buf, 
         memcpy(tmp_buf + device->iaddr_bytes, buffer, size);
 
         /* Write to buf content to i2c device length is address length and write buffer length */
-        if (static_cast<unsigned int>(write(device->bus, tmp_buf, device->iaddr_bytes + size)) != device->iaddr_bytes + size)
+        if ((unsigned int)(write(device->bus, tmp_buf, device->iaddr_bytes + size)) != device->iaddr_bytes + size)
         {
 
             perror("I2C write error:");
