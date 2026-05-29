@@ -118,7 +118,7 @@ public:
      * @param value 
      * @return int 
      */
-    int writeReg(int regAddr, int value);
+    int writeReg(uint32_t regAddr, uint32_t value);
 
     /**
      * @brief 
@@ -128,9 +128,14 @@ public:
      * @param value 
      * @return int 
      */
-    int readReg(int regAddr, int *value);
+    int readReg(uint32_t regAddr, uint32_t *value);
 
     int readReg64b(uint32_t regAddr,  char *str);
+
+    int read_i2c_status(uint32_t *status);
+
+    int print_i2c_status(uint32_t status);
+
     int printBootstrapData(void);
 
     int read_VdacPda( int *dacValue, double *voltageValue);

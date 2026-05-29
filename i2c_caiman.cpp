@@ -107,12 +107,11 @@ char *i2c_get_device_desc(const I2CDevice *device, char *buf, size_t size)
 **	#len	:	how many data to read, lenght must less than or equal to buf size
 **	@return : 	success return read data length, failed -1
 */
-ssize_t i2c_caiman_read(const I2CDevice *device, uint32_t iaddr, void *buf, size_t len)
+ssize_t i2c_caiman_read(const I2CDevice *device, uint32_t iaddr, void *buf, size_t len, void *status)
 {
     ssize_t cnt;
     unsigned char addr[INT_ADDR_MAX_BYTES];
     unsigned char delay = GET_I2C_DELAY(device->delay);
-    // uint32_t regAddrHeader = 0x00400800; // Command code READ_MEM_CMD (0x0800) 
     uint32_t regAddrHeader =((uint32_t)len << 16) | (uint32_t)READ_MEM_CMD; // Command code READ_MEM_CMD (0x0800) and length in high 16 bit
     uint64_t regAddrRead = ((uint64_t)iaddr << 32) | (uint64_t)regAddrHeader;
 
@@ -120,9 +119,9 @@ ssize_t i2c_caiman_read(const I2CDevice *device, uint32_t iaddr, void *buf, size
 	ssize_t size = sizeof(readbuf);
 	memset(readbuf, 0, size);
 
-    unsigned char status[4]; // creates status buffer to store the first 4 bytes which is status code
-	ssize_t size_status = sizeof(status);
-	memset(status, 0, size_status);
+    unsigned char statusbuf[4]; // creates status buffer to store the first 4 bytes which is status code
+	ssize_t size_status = sizeof(statusbuf);
+	memset(statusbuf, 0, size_status);
 
     /* Set i2c slave address */
     if (i2c_select(device->bus, device->addr, device->tenbit) == -1)
@@ -136,7 +135,7 @@ ssize_t i2c_caiman_read(const I2CDevice *device, uint32_t iaddr, void *buf, size
     // i2c_iaddr_convert(iaddr, device->iaddr_bytes, addr);
     i2c_iaddr_convert(regAddrRead, device->iaddr_bytes , addr);
 
-    /* Write internal address to devide  */
+    /* Write internal address to device  */
     if (write(device->bus, addr, device->iaddr_bytes) != device->iaddr_bytes)
     {
 
@@ -161,9 +160,11 @@ ssize_t i2c_caiman_read(const I2CDevice *device, uint32_t iaddr, void *buf, size
     // printf("\n");
     
     /* Check status codes */
-    memcpy(status, readbuf, size_status); // copy the first 4 bytes which is status code to status buffer
-    uint16_t ack = (status[1] << 8) | status[0]; 
-    uint16_t code = (status[3] << 8) | status[2];
+    memcpy(statusbuf, readbuf, size_status); // copy the first 4 bytes which is status code to status buffer
+    uint16_t ack = (statusbuf[1] << 8) | statusbuf[0]; 
+    uint16_t code = (statusbuf[3] << 8) | statusbuf[2];
+
+    memcpy(status, statusbuf, size_status); //return status code to caller
 
     if(ack != READ_MEM_ACK)
     {
@@ -194,10 +195,18 @@ ssize_t i2c_caiman_read(const I2CDevice *device, uint32_t iaddr, void *buf, size
 ssize_t i2c_caiman_write(const I2CDevice *device, uint32_t iaddr, const void *buf, size_t len)
 {
     ssize_t remain = len;
-    size_t cnt = 0, size = 0;
+    size_t cnt = 0;
     const unsigned char *buffer = (unsigned char *)buf;
     unsigned char delay = GET_I2C_DELAY(device->delay);
-    unsigned char tmp_buf[PAGE_MAX_BYTES + INT_ADDR_MAX_BYTES];
+    // unsigned char tmp_buf[PAGE_MAX_BYTES + INT_ADDR_MAX_BYTES];
+
+    unsigned char addr[INT_ADDR_MAX_BYTES];
+    uint32_t regAddrHeader =((uint32_t)len << 16) | (uint32_t)WRITE_MEM_CMD; // Command code WRITE_MEM_CMD (0x0802) and length in high 16 bit
+    uint64_t regAddrWrite = ((uint64_t)iaddr << 32) | (uint64_t)regAddrHeader;
+
+	// unsigned char databuf[len]; // creates write buffer for
+	// ssize_t size = sizeof(databuf);
+	// memset(databuf, 0, size);
 
     /* Set i2c slave address */
     if (i2c_select(device->bus, device->addr, device->tenbit) == -1)
@@ -206,36 +215,148 @@ ssize_t i2c_caiman_write(const I2CDevice *device, uint32_t iaddr, const void *bu
         return -1;
     }
 
-    /* Once only can write less than 4 byte */
-    while (remain > 0)
+    /* Convert i2c internal address */
+    // memset(addr, 0, sizeof(addr));
+    // // i2c_iaddr_convert(iaddr, device->iaddr_bytes, addr);
+    // i2c_iaddr_convert(regAddrWrite, device->iaddr_bytes , addr);
+
+    size_t size = INT_ADDR_MAX_BYTES + len; // total size is address length and write buffer length
+    unsigned char writebuf[size];
+    memset(writebuf, 0, sizeof(writebuf));
+
+    /* Convert i2c internal address */
+    i2c_iaddr_convert(regAddrWrite, device->iaddr_bytes, writebuf);
+    
+    /* Copy data to tmp_buf */
+    memcpy(writebuf + INT_ADDR_MAX_BYTES, buffer, size);
+
+    /* Print full buffer for debug */
+    printf("Write Buffer=");
+	for (int i = 0; i < size; i++) { printf("%02x ", writebuf[i]); }
+    printf("\n");
+
+    /* Write to buf content to i2c device length is address length and write buffer length */
+    if ((unsigned int)(write(device->bus, writebuf, size)) != size)
+    {
+        perror("I2C write error:");
+        return -1;
+    }
+
+
+    // /* Once only can write less than 4 byte */
+    // while (remain > 0)
+    // {
+
+    //     size = GET_WRITE_SIZE(iaddr % device->page_bytes, remain, device->page_bytes);
+
+    //     /* Convert i2c internal address */
+    //     memset(tmp_buf, 0, sizeof(tmp_buf));
+    //     i2c_iaddr_convert(iaddr, device->iaddr_bytes, tmp_buf);
+
+    //     /* Copy data to tmp_buf */
+    //     memcpy(tmp_buf + device->iaddr_bytes, buffer, size);
+
+    //     /* Write to buf content to i2c device length is address length and write buffer length */
+    //     if ((unsigned int)(write(device->bus, tmp_buf, device->iaddr_bytes + size)) != device->iaddr_bytes + size)
+    //     {
+
+    //         perror("I2C write error:");
+    //         return -1;
+    //     }
+
+    //     /* XXX: Must have a little time delay */
+    //     i2c_delay(delay);
+
+    //     /* Move to next #size bytes */
+    //     cnt += size;
+    //     iaddr += size;
+    //     buffer += size;
+    //     remain -= size;
+    // }
+
+    return cnt;
+}
+
+ssize_t i2c_caiman_status(const I2CDevice *device, void *status, size_t len, bool print)
+{
+    ssize_t cnt;
+
+	unsigned char readbuf[len]; // creates read buffer with extra 4 bytes for status code
+	ssize_t size = sizeof(readbuf);
+	memset(readbuf, 0, size);
+
+    unsigned char statusbuf[4]; // creates status buffer to store the first 4 bytes which is status code
+	ssize_t size_status = sizeof(statusbuf);
+	memset(statusbuf, 0, size_status);
+
+    /* Set i2c slave address */
+    if (i2c_select(device->bus, device->addr, device->tenbit) == -1)
     {
 
-        size = GET_WRITE_SIZE(iaddr % device->page_bytes, remain, device->page_bytes);
-
-        /* Convert i2c internal address */
-        memset(tmp_buf, 0, sizeof(tmp_buf));
-        i2c_iaddr_convert(iaddr, device->iaddr_bytes, tmp_buf);
-
-        /* Copy data to tmp_buf */
-        memcpy(tmp_buf + device->iaddr_bytes, buffer, size);
-
-        /* Write to buf content to i2c device length is address length and write buffer length */
-        if ((unsigned int)(write(device->bus, tmp_buf, device->iaddr_bytes + size)) != device->iaddr_bytes + size)
-        {
-
-            perror("I2C write error:");
-            return -1;
-        }
-
-        /* XXX: Must have a little time delay */
-        i2c_delay(delay);
-
-        /* Move to next #size bytes */
-        cnt += size;
-        iaddr += size;
-        buffer += size;
-        remain -= size;
+        return -1;
     }
+
+    /* Read count bytes data from int_addr specify address */
+    if ((cnt = read(device->bus, readbuf, size)) == -1)
+    {
+        perror("Read i2c data error");
+        return -1;
+    }
+
+    /* Check status codes */
+    memcpy(statusbuf, readbuf, size_status); // copy the first 4 bytes which is status code to status buffer
+    uint16_t ack = (statusbuf[1] << 8) | statusbuf[0]; 
+    uint16_t code = (statusbuf[3] << 8) | statusbuf[2];
+
+    if(print)
+    {
+        fprintf(stderr, "I2C read aknowledge code: 0x%04X ", ack);
+        switch (ack)
+        {
+            case READ_MEM_ACK:
+                fprintf(stderr, "(READ_MEM_ACK) ");
+                break;
+            case WRITE_MEM_ACK:
+                fprintf(stderr, "(WRITE_MEM_ACK) ");
+                break;
+            default:
+                fprintf(stderr, "(Unknown ACK) ");
+        }
+        fprintf(stderr, "\n");
+
+
+        fprintf(stderr, "I2C read status code: 0x%04X", code);
+        switch (code)
+        {
+            case STATUS_SUCCESS:
+                fprintf(stderr, "(STATUS_SUCCESS) ");
+                break;
+            case STATUS_INVALID_CMD:
+                fprintf(stderr, "(STATUS_INVALID_CMD) ");
+                break;
+            case STATUS_INVALID_ACCESS:
+                fprintf(stderr, "(STATUS_INVALID_ACCESS) ");
+                break;
+            case STATUS_OUT_OF_RANGE:
+                fprintf(stderr, "(STATUS_OUT_OF_RANGE) ");
+                break;
+            case STATUS_INCORRECT_SIZE:
+                fprintf(stderr, "(STATUS_INCORRECT_SIZE) ");
+                break;
+            case STATUS_INCORRECT_ADDR:
+                fprintf(stderr, "(STATUS_INCORRECT_ADDR) ");
+                break;
+            case STATUS_BUSY:
+                fprintf(stderr, "(STATUS_BUSY) ");
+                break;
+            default:
+                fprintf(stderr, "(Unknown Status) ");
+        }
+        fprintf(stderr, "\n");
+    }
+
+    /* Copy data to buf */
+    memcpy(status, readbuf, len);
 
     return cnt;
 }

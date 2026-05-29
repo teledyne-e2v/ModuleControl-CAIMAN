@@ -1,6 +1,8 @@
 #include <fstream>
 #include "ModuleControl.hpp"
 
+#define DEBUG_MODE 1
+
 #define SENSORS_I2C_ADDR 0x27
 #define BOOTSTRAP_MANUFACTURER_NAME 		0x00000000
 #define BOOTSTRAP_MODEL_NAME 				0x00000040
@@ -9,6 +11,23 @@
 #define BOOTSTRAP_SERIAL_NUMBER 			0x00000100
 #define BOOTSTRAP_USER_DEFINE_NAME 			0x00000140
 #define BOOTSTRAP_DEVICE_FIRMWARE_VERSION 	0x00000180
+
+/* Status Codes */
+#define STATUS_NULL 				0x00000000
+#define STATUS_READ_SUCCESS 		0x00000801
+#define STATUS_READ_INVALID_CMD 	0x00100801
+#define STATUS_READ_INVALID_ACCESS 	0x00210801
+#define STATUS_READ_OUT_OF_RANGE 	0x00220801
+#define STATUS_READ_INCORRECT_SIZE 	0x00240801
+#define STATUS_READ_INCORRECT_ADDR 	0x00250801
+#define STATUS_READ_BUSY 			0x00400801
+#define STATUS_WRITE_SUCCESS 		0x00000803
+#define STATUS_WRITE_INVALID_CMD 	0x00100803
+#define STATUS_WRITE_INVALID_ACCESS 0x00210803
+#define STATUS_WRITE_OUT_OF_RANGE 	0x00220803
+#define STATUS_WRITE_INCORRECT_SIZE 0x00240803
+#define STATUS_WRITE_INCORRECT_ADDR 0x00250803
+#define STATUS_WRITE_BUSY 			0x00400803
 
 #define REG_FB_STATE 0x0068
 #define REG_LINE_LENGTH 0x0006
@@ -76,7 +95,7 @@ void ModuleCtrl::ModuleControlClose()
 /************************************************
  *Read register
  ************************************************/
-int ModuleCtrl::readReg(int regAddr, int *value)
+int ModuleCtrl::readReg(uint32_t regAddr, uint32_t *value)
 {
 	unsigned char buffer[2];
 	ssize_t size = sizeof(buffer);
@@ -84,14 +103,27 @@ int ModuleCtrl::readReg(int regAddr, int *value)
 	int error=0;
 	device.page_bytes = 256;
 
-	if ((i2c_caiman_read(&device, regAddr, buffer, size)) != size)
+	unsigned char status[4];
+	ssize_t size_status = sizeof(status);
+	memset(status, 0, size_status);
+	uint16_t status_value = 0;
+
+	if ((i2c_caiman_read(&device, regAddr, buffer, size, status)) != size)
 	{
-		fprintf(stderr, "READ ERROR: device=0x%x register address=0x%x\n", device.addr, regAddr);
+		fprintf(stderr, "READ ERROR: device=0x%x register address=0x%x\n", device.addr, regAddr); //TODO: print status code to debug it: issue!
+		status_value = (status[3] << 24) | (status[2] << 16) | (status[1] << 8) | status[0];
+		print_i2c_status(status_value);
+
 		error=-3;
 	}
 	else
 	{
 		// *value = (buffer[0] << 8) | buffer[1]; don't need to swap bytes! memcpy may do the job
+		#ifdef DEBUG_MODE
+		status_value = (status[3] << 24) | (status[2] << 16) | (status[1] << 8) | status[0];
+		print_i2c_status(status_value);
+		#endif
+
 		*value = (buffer[1] << 8) | buffer[0];
 	}
 
@@ -105,9 +137,20 @@ int ModuleCtrl::readReg64b(uint32_t regAddr, char *str)
 	memset(buffer, 0, size);
 	int error=0;
 	device.page_bytes = 256;
+
+	unsigned char status[4];
+	ssize_t size_status = sizeof(status);
+	memset(status, 0, size_status);
+	uint16_t status_value = 0;
 	
-	error = i2c_caiman_read(&device, regAddr, buffer, size);
-	// printf("buffer_fb=%s\n", buffer);
+	error = i2c_caiman_read(&device, regAddr, buffer, size, status);
+	status_value = (status[3] << 24) | (status[2] << 16) | (status[1] << 8) | status[0];
+
+	#ifdef DEBUG_MODE
+	printf("buffer_fb=%s\n", buffer);
+	print_i2c_status(status_value);
+	#endif
+
 	strcpy(str, (char*)buffer);
 
 	return error;
@@ -121,19 +164,24 @@ int ModuleCtrl::printBootstrapData()
 	memset(buffer, 0, size);
 	device.page_bytes = 256;
 
-	error = i2c_caiman_read(&device, BOOTSTRAP_MANUFACTURER_NAME, buffer, size);
+	unsigned char status[4];
+	ssize_t size_status = sizeof(status);
+	memset(status, 0, size_status);
+	uint16_t status_value = 0;
+
+	error = i2c_caiman_read(&device, BOOTSTRAP_MANUFACTURER_NAME, buffer, size, status);
 	printf("MANUFACTURER_NAME=%s\n", buffer);
-	error = i2c_caiman_read(&device, BOOTSTRAP_MODEL_NAME, buffer, size);
+	error = i2c_caiman_read(&device, BOOTSTRAP_MODEL_NAME, buffer, size, status);
 	printf("MODEL_NAME=%s\n", buffer);
-	error = i2c_caiman_read(&device, BOOTSTRAP_DEVICE_VERSION, buffer, size);
+	error = i2c_caiman_read(&device, BOOTSTRAP_DEVICE_VERSION, buffer, size, status);
 	printf("DEVICE_VERSION=%s\n", buffer);
-	error = i2c_caiman_read(&device, BOOTSTRAP_MANUFACTURER_INFO, buffer, size);
+	error = i2c_caiman_read(&device, BOOTSTRAP_MANUFACTURER_INFO, buffer, size, status);
 	printf("MANUFACTURER_INFO=%s\n", buffer);
-	error = i2c_caiman_read(&device, BOOTSTRAP_SERIAL_NUMBER, buffer, size);
+	error = i2c_caiman_read(&device, BOOTSTRAP_SERIAL_NUMBER, buffer, size, status);
 	printf("SERIAL_NUMBER=%s\n", buffer);
-	error = i2c_caiman_read(&device, BOOTSTRAP_USER_DEFINE_NAME, buffer, size);
+	error = i2c_caiman_read(&device, BOOTSTRAP_USER_DEFINE_NAME, buffer, size, status);
 	printf("USER_DEFINE_NAME=%s\n", buffer);
-	error = i2c_caiman_read(&device, BOOTSTRAP_DEVICE_FIRMWARE_VERSION, buffer, size);
+	error = i2c_caiman_read(&device, BOOTSTRAP_DEVICE_FIRMWARE_VERSION, buffer, size, status);
 	printf("DEVICE_FIRMWARE_VERSION=%s\n", buffer);
 
 	return error;
@@ -142,17 +190,27 @@ int ModuleCtrl::printBootstrapData()
 /************************************************
  *Write register
  ************************************************/
-int ModuleCtrl::writeReg(int regAddr, int value)
+int ModuleCtrl::writeReg(uint32_t regAddr, uint32_t value)
 {
-	unsigned char buffer[2];
+	unsigned char buffer[4];
 	ssize_t size = sizeof(buffer);
 	memset(buffer, 0, size);
 	int error=0;
 
-	*buffer = ((value)&0xff00) >> 8;
-	*(buffer + 1) = ((value)&0x00ff);
+	// *buffer = ((value)&0xff000000) >> 24;
+	// *(buffer + 1) = ((value)&0x00ff0000) >> 16;
+	// *(buffer + 2) = ((value)&0x0000ff00) >> 8;
+	// *(buffer + 3) = ((value)&0x000000ff);
+
+	*buffer = ((value)&0x000000ff);
+	*(buffer + 1) = ((value)&0x0000ff00) >> 8;
+	*(buffer + 2) = ((value)&0x00ff0000) >> 16;
+	*(buffer + 3) = ((value)&0xff000000) >> 24;
 
 	device.page_bytes = 256;
+
+
+	i2c_caiman_write(&device, regAddr, buffer, size);
 
 	// if ((i2c_ioctl_write(&device, regAddr, buffer, size)) != size)
 	// {
@@ -162,6 +220,85 @@ int ModuleCtrl::writeReg(int regAddr, int value)
 	//printf("error=%d\n",error);
 	return error;
 }
+
+int ModuleCtrl::read_i2c_status(uint32_t *status)
+{
+	unsigned char buffer[4];
+	ssize_t size = sizeof(buffer);
+	memset(buffer, 0, size);
+	int error=0;
+	device.page_bytes = 256;
+
+	error = i2c_caiman_status(&device, buffer, size, false);
+
+	#ifdef DEBUG_MODE
+	printf("I2C Acknowledge Buffer= ");
+	for (int i = 0; i < size; i++) { printf("%02x ", buffer[i]); }
+    printf("\n");
+	#endif
+
+	*status = (buffer[3] << 24) | (buffer[2] << 16) | (buffer[1] << 8) | buffer[0];
+
+	return error;
+}
+
+int ModuleCtrl::print_i2c_status(uint32_t status)
+{
+	switch (status)
+	{
+		case STATUS_NULL:
+			printf("I2C Status: 0x%08x NULL\n", status);
+			break;
+		case STATUS_READ_SUCCESS:
+			printf("I2C Status: 0x%08x READ_SUCCESS\n", status);
+			break;
+		case STATUS_READ_INVALID_CMD:
+			printf("I2C Status: 0x%08x READ_INVALID_CMD\n", status);
+			break;
+		case STATUS_READ_INVALID_ACCESS:
+			printf("I2C Status: 0x%08x READ_INVALID_ACCESS\n", status);
+			break;
+		case STATUS_READ_OUT_OF_RANGE:
+			printf("I2C Status: 0x%08x READ_OUT_OF_RANGE\n", status);
+			break;
+		case STATUS_READ_INCORRECT_SIZE:
+			printf("I2C Status: 0x%08x READ_INCORRECT_SIZE\n", status);
+			break;
+		case STATUS_READ_INCORRECT_ADDR:
+			printf("I2C Status: 0x%08x READ_INCORRECT_ADDR\n", status);
+			break;
+		case STATUS_READ_BUSY:
+			printf("I2C Status: 0x%08x READ_BUSY\n", status);
+			break;
+		case STATUS_WRITE_SUCCESS:
+			printf("I2C Status: 0x%08x WRITE_SUCCESS\n", status);
+			break;
+		case STATUS_WRITE_INVALID_CMD:
+			printf("I2C Status: 0x%08x WRITE_INVALID_CMD\n", status);
+			break;
+		case STATUS_WRITE_INVALID_ACCESS:
+			printf("I2C Status: 0x%08x WRITE_INVALID_ACCESS\n", status);
+			break;
+		case STATUS_WRITE_OUT_OF_RANGE:
+			printf("I2C Status: 0x%08x WRITE_OUT_OF_RANGE\n", status);
+			break;
+		case STATUS_WRITE_INCORRECT_SIZE:
+			printf("I2C Status: 0x%08x WRITE_INCORRECT_SIZE\n", status);
+			break;
+		case STATUS_WRITE_INCORRECT_ADDR:
+			printf("I2C Status: 0x%08x WRITE_INCORRECT_ADDR\n", status);
+			break;
+		case STATUS_WRITE_BUSY:
+			printf("I2C Status: 0x%08x WRITE_BUSY\n", status);
+			break;
+		default:
+			printf("I2C Acknowledge: 0x%08x UNKNOWN\n", status);
+			break;
+	}
+
+	return 0;
+}
+
 int ModuleCtrl::read_sensor_state(int *state)
 {
 	int ulAddress;
@@ -170,7 +307,7 @@ int ModuleCtrl::read_sensor_state(int *state)
 
 	ulAddress = REG_FB_STATE;
 
-	error=this->readReg(ulAddress, &ulValue);
+	// error=this->readReg(ulAddress, &ulValue);
 	*state=ulValue;
 
 	return error;

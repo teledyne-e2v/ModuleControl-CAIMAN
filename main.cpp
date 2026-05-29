@@ -5,7 +5,6 @@
 #include <sys/ioctl.h>
 #include <fstream>
 #include "ModuleControl.hpp"
-#include "ModuleControl.cpp"
 
 void printHelp();
 int read_sensor_feedback(ModuleCtrl *moduleCtrl);
@@ -24,14 +23,14 @@ int main(){
 
 	ModuleCtrl *moduleCtrl;
 	uint32_t regAddress=0;
-	int regValue=0;
+	uint32_t regValue=0;
 	char str[64];
 	char *ptrStr = str;
 
 	float tint=0;
 	float again=0;
 	float dgain=0;
-	int state=0;
+	uint32_t state=0;
 	int dist1=0;
 	int dist2=0;
 	int dist3=0;
@@ -39,6 +38,7 @@ int main(){
     double PdaVoltageValue;
 	double localTemp, remoteTemp;
 	int tmpMode=0;
+	uint32_t status=0;
 
 	moduleCtrl = new ModuleCtrl();
 
@@ -67,7 +67,6 @@ int main(){
 				moduleCtrl->printBootstrapData();
 				break;
 
-
 			case 'r': //read register
 				printf("Register address (hexa): ");
 				scanf("%x",&regAddress);
@@ -83,23 +82,30 @@ int main(){
 				scanf("%x",&regValue);
         			moduleCtrl->writeReg(regAddress, regValue);
 				break;
+
+			case 'a': //read acknowledge
+				moduleCtrl->read_i2c_status(&status);
+				moduleCtrl->print_i2c_status(status);
+				break;
+
 			case 't': //setup tint
 				printf("Exposition time in ms : ");
 				scanf("%f",&tint);
            			moduleCtrl->setTint(tint);
 				break;
-			case 'a': //setup analog gain
-				printf("Set Analog gain\nAuthorized values : x1, x1.2, x1.5, x2, x3, x4, x6, x7, x8, x9, x10, x12, x16\nValue:");
-				scanf("%f",&again);
-            			moduleCtrl->setAnalogGain(again);
-				break;
+
+			// case 'a': //setup analog gain
+			// 	printf("Set Analog gain\nAuthorized values : x1, x1.2, x1.5, x2, x3, x4, x6, x7, x8, x9, x10, x12, x16\nValue:");
+			// 	scanf("%f",&again);
+            // 			moduleCtrl->setAnalogGain(again);
+			// 	break;
 			case 'g': //setup digital gain
 				printf("Set digital gain (from x0.004 to x16)\nValue: ");
 				scanf("%f",&dgain);
 				moduleCtrl->setDigitalGain(dgain);
 				break;
 			case 's': //Read sensor state
-				err = moduleCtrl->read_sensor_state(&state);
+				// err = moduleCtrl->read_sensor_state(&state);
 				if(err < 0)
 				{
 					printf("read sensor state error=%d\n",err);
@@ -154,10 +160,10 @@ void printHelp(){
 	printf("\nMODULE CONTROL\n");
 	printf("Tools menu:\n");
 	printf("\tb:\tprint bootstrap data\n");
-	// printf("\ta:\tchange analog gain\n");
 	// printf("\tg:\tchange digital gain\n");
 	printf("\tr:\tread a register\n");
 	printf("\tw:\twrite in a register\n");
+	printf("\ta:\tread i2c acknowledge\n");
 	// printf("\ts:\tread sensor state\n");
 	// printf("\tf:\tread feedback registers\n");
 	//printf("\td:\tdump register values\n");
@@ -170,8 +176,8 @@ int read_sensor_feedback(ModuleCtrl *moduleCtrl)
 {
 
 	// PARAMETERS
-	int Address;
-	int Value;
+	uint32_t Address;
+	uint32_t Value;
 
 	//READ CHIP ID
 	Address = 0x007F;
@@ -191,7 +197,7 @@ int read_sensor_feedback(ModuleCtrl *moduleCtrl)
 	Value = 0;
 	// moduleCtrl->readReg(Address, &Value);
 	// printf("reg_state=0x%04x (%d)",Value,Value);
-	moduleCtrl->read_sensor_state(&Value);
+	// moduleCtrl->read_sensor_state(&Value);
 	Value=Value/256;
 	printf("\nglobal_state=0x%x (%d)",Value,Value);
 	if (Value==0x100) printf(" => SDTBY \n");

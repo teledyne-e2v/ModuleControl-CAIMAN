@@ -42,8 +42,9 @@ extern "C"
     void i2c_iaddr_convert(uint64_t iaddr, unsigned int len, unsigned char *addr);
 
     /* I2C file I/O read, write */
-    ssize_t i2c_caiman_read(const I2CDevice *device, uint32_t iaddr, void *buf, size_t len);
+    ssize_t i2c_caiman_read(const I2CDevice *device, uint32_t iaddr, void *buf, size_t len, void *status);
     ssize_t i2c_caiman_write(const I2CDevice *device, uint32_t iaddr, const void *buf, size_t len);
+    ssize_t i2c_caiman_status(const I2CDevice *device, void *status, size_t len, bool print);
 
     /* I2C read / write handle function */
     typedef ssize_t (*I2C_READ_HANDLE)(const I2CDevice *dev, uint32_t iaddr, void *buf, size_t len);
