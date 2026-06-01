@@ -106,7 +106,7 @@ int ModuleCtrl::readReg(uint32_t regAddr, uint32_t *value)
 	unsigned char status[4];
 	ssize_t size_status = sizeof(status);
 	memset(status, 0, size_status);
-	uint16_t status_value = 0;
+	uint32_t status_value = 0;
 
 	if ((i2c_caiman_read(&device, regAddr, buffer, size, status)) != size)
 	{
@@ -141,7 +141,7 @@ int ModuleCtrl::readReg64b(uint32_t regAddr, char *str)
 	unsigned char status[4];
 	ssize_t size_status = sizeof(status);
 	memset(status, 0, size_status);
-	uint16_t status_value = 0;
+	uint32_t status_value = 0;
 	
 	error = i2c_caiman_read(&device, regAddr, buffer, size, status);
 	status_value = (status[3] << 24) | (status[2] << 16) | (status[1] << 8) | status[0];
@@ -167,7 +167,7 @@ int ModuleCtrl::printBootstrapData()
 	unsigned char status[4];
 	ssize_t size_status = sizeof(status);
 	memset(status, 0, size_status);
-	uint16_t status_value = 0;
+	uint32_t status_value = 0;
 
 	error = i2c_caiman_read(&device, BOOTSTRAP_MANUFACTURER_NAME, buffer, size, status);
 	printf("MANUFACTURER_NAME=%s\n", buffer);
@@ -209,15 +209,13 @@ int ModuleCtrl::writeReg(uint32_t regAddr, uint32_t value)
 
 	device.page_bytes = 256;
 
+	if ((i2c_caiman_write(&device, regAddr, buffer, size)) == -1)
+	{
+		fprintf(stderr, "WRITE ERROR: device=0x%x register address=0x%x\n", device.addr, regAddr);
 
-	i2c_caiman_write(&device, regAddr, buffer, size);
+		error=-3;
+	}
 
-	// if ((i2c_ioctl_write(&device, regAddr, buffer, size)) != size)
-	// {
-	// 	fprintf(stderr, "WRITE ERROR: device=0x%x register address=0x%x\n", device.addr, regAddr);
-	// 	error=-3;
-	// }
-	//printf("error=%d\n",error);
 	return error;
 }
 

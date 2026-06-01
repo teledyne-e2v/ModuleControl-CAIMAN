@@ -242,39 +242,7 @@ ssize_t i2c_caiman_write(const I2CDevice *device, uint32_t iaddr, const void *bu
         return -1;
     }
 
-
-    // /* Once only can write less than 4 byte */
-    // while (remain > 0)
-    // {
-
-    //     size = GET_WRITE_SIZE(iaddr % device->page_bytes, remain, device->page_bytes);
-
-    //     /* Convert i2c internal address */
-    //     memset(tmp_buf, 0, sizeof(tmp_buf));
-    //     i2c_iaddr_convert(iaddr, device->iaddr_bytes, tmp_buf);
-
-    //     /* Copy data to tmp_buf */
-    //     memcpy(tmp_buf + device->iaddr_bytes, buffer, size);
-
-    //     /* Write to buf content to i2c device length is address length and write buffer length */
-    //     if ((unsigned int)(write(device->bus, tmp_buf, device->iaddr_bytes + size)) != device->iaddr_bytes + size)
-    //     {
-
-    //         perror("I2C write error:");
-    //         return -1;
-    //     }
-
-    //     /* XXX: Must have a little time delay */
-    //     i2c_delay(delay);
-
-    //     /* Move to next #size bytes */
-    //     cnt += size;
-    //     iaddr += size;
-    //     buffer += size;
-    //     remain -= size;
-    // }
-
-    return cnt;
+    return 0;
 }
 
 ssize_t i2c_caiman_status(const I2CDevice *device, void *status, size_t len, bool print)
